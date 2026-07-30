@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-llmwiki"
+version = "0.1.0"
+description = "Karpathy-native local Markdown wiki memory provider for Hermes Agent"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "chancelu"},
+]
+keywords = ["hermes", "agent", "memory", "wiki", "markdown", "obsidian", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/chancelu/hermes-llmwiki"
+Issues = "https://github.com/chancelu/hermes-llmwiki/issues"
+
+[project.scripts]
+llmwiki = "hermes_llmwiki.__main__:main"
+
+[project.entry-points."hermes.memory_provider"]
+llmwiki = "hermes_llmwiki:LlmwikiMemoryProvider"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "black", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hermes_llmwiki*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312", "py313"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

@@ -1,0 +1,6 @@
+name: llmwiki
+description: Karpathy-native local Markdown wiki memory provider for Hermes Agent
+version: 0.1.0
+author: chancelu
+license: MIT
+homepage: https://github.com/chancelu/hermes-llmwiki
