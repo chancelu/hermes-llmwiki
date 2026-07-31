@@ -367,6 +367,7 @@ class TestProvider:
             p = LlmwikiMemoryProvider()
             p._vault_path = vault
             p._config = {"schema": {"daily": "chronicle/daily/"}}
+            p._agent_context = "primary"
 
             p.sync_turn("Hello", "Hi there!")
 
@@ -376,12 +377,26 @@ class TestProvider:
             assert "Hello" in content
             assert "Hi there!" in content
 
+    def test_sync_turn_skips_non_primary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            p = LlmwikiMemoryProvider()
+            p._vault_path = vault
+            p._config = {"schema": {"daily": "chronicle/daily/"}}
+            p._agent_context = "cron"
+
+            p.sync_turn("Hello", "Hi there!")
+
+            daily_files = list((vault / "chronicle" / "daily").glob("*.md"))
+            assert len(daily_files) == 0
+
     def test_sync_turn_truncation(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
             p = LlmwikiMemoryProvider()
             p._vault_path = vault
             p._config = {"schema": {"daily": "chronicle/daily/"}}
+            p._agent_context = "primary"
 
             long_user = "x" * 10000
             long_assistant = "y" * 10000
@@ -421,6 +436,23 @@ class TestProvider:
             result = p.prefetch("cryptocurrency")
             assert "Bitcoin" in result
 
+    def test_prefetch_with_session_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            (vault / "entities").mkdir()
+            atomic_write_text(vault / "entities" / "Bitcoin.md", "# Bitcoin\n\ncryptocurrency")
+
+            p = LlmwikiMemoryProvider()
+            p._vault_path = vault
+            p._config = {
+                "schema": {"entities": "entities/"},
+                "search": {"engine": "python", "max_results": 10, "context_lines": 3},
+            }
+
+            result = p.prefetch("cryptocurrency", session_id="sess-123")
+            assert p._session_id == "sess-123"
+            assert "Bitcoin" in result
+
     def test_prefetch_no_match(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault = Path(tmp)
@@ -449,6 +481,7 @@ class TestProvider:
             p = LlmwikiMemoryProvider()
             p._vault_path = vault
             p._config = {"schema": {"daily": "chronicle/daily/"}}
+            p._agent_context = "primary"
 
             p.on_session_end(
                 [
@@ -462,6 +495,55 @@ class TestProvider:
             content = daily_files[0].read_text(encoding="utf-8")
             assert "Session End" in content
             assert "python" in content.lower()
+
+    def test_on_session_switch(self):
+        p = LlmwikiMemoryProvider()
+        p._session_id = "old-session"
+        p._turn_buffer = [{"timestamp": "12:00", "user": "hi", "assistant": "hello"}]
+
+        p.on_session_switch("new-session", reset=True)
+        assert p._session_id == "new-session"
+        assert p._turn_buffer == []
+
+    def test_system_prompt_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            p = LlmwikiMemoryProvider()
+            p._vault_path = vault
+
+            block = p.system_prompt_block()
+            assert "local Markdown wiki" in block
+            assert "create_entity" in block
+            assert "search_wiki" in block
+
+    def test_backup_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            p = LlmwikiMemoryProvider()
+            p._vault_path = vault
+
+            paths = p.backup_paths()
+            assert len(paths) == 1
+            assert str(vault) in paths[0]
+
+    def test_save_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            hermes_home = Path(tmp)
+            p = LlmwikiMemoryProvider()
+
+            p.save_config({"vault_path": "/tmp/wiki"}, str(hermes_home))
+
+            config_path = hermes_home / "llmwiki.json"
+            assert config_path.exists()
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            assert data["vault_path"] == "/tmp/wiki"
+
+    def test_get_config_schema(self):
+        p = LlmwikiMemoryProvider()
+        schema = p.get_config_schema()
+        assert isinstance(schema, list)
+        assert len(schema) >= 1
+        assert schema[0]["key"] == "vault_path"
 
     def test_tools(self):
         p = LlmwikiMemoryProvider()
@@ -486,7 +568,9 @@ class TestProvider:
                     "content": "Test content",
                 },
             )
-            assert "Appended" in result
+            data = json.loads(result)
+            assert data["status"] == "ok"
+            assert "Appended" in data["message"]
 
     def test_tool_create_entity(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -504,8 +588,26 @@ class TestProvider:
                     "tags": ["crypto"],
                 },
             )
-            assert "Created" in result
+            data = json.loads(result)
+            assert data["status"] == "ok"
+            assert "Created" in data["message"]
             assert (vault / "entities" / "Bitcoin.md").exists()
+
+    def test_tool_call_returns_json(self):
+        """handle_tool_call must return a JSON string per Hermes protocol."""
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            p = LlmwikiMemoryProvider()
+            p._vault_path = vault
+            p._config = {"schema": {"entities": "entities/"}}
+
+            result = p.handle_tool_call(
+                "create_entity",
+                {"name": "X", "type": "concept", "content": "Y"},
+            )
+            # Must be valid JSON
+            parsed = json.loads(result)
+            assert "status" in parsed
 
     def test_post_setup(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -515,8 +617,5 @@ class TestProvider:
                 Path.home() / ".hermes",
                 {"vault_path": str(vault), "schema": {}},
             )
-            print("DEBUG vault contents:", list(vault.iterdir()))
             assert (vault / "SCHEMA.md").exists()
-            print("DEBUG chronicle exists:", (vault / "chronicle").exists())
-            print("DEBUG daily exists:", (vault / "chronicle" / "daily").exists())
             assert (vault / "chronicle" / "daily").is_dir()
