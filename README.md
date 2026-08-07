@@ -1,117 +1,223 @@
-# hermes-llmwiki
+# LLMWiki
 
-> **"Obsidian is the IDE; the LLM is the programmer; the wiki is the codebase."** — Andrej Karpathy
+> **Context Window = RAM, Local Wiki = Disk**
+>
+> A zero-dependency framework that turns your local Markdown vault (Obsidian, selfwiki, etc.) into long-term memory for any AI agent.
 
-A **Karpathy-native**, **zero-infrastructure** memory provider for [Hermes Agent](https://github.com/NousResearch/hermes-agent). Turns your local Markdown vault into a compounding knowledge system — no Docker, no cloud, no vector DB.
+## What This Is
 
-## Why This Exists
+Every serious agent user hits the same wall: the agent forgets everything between sessions. LLMWiki solves this by treating:
 
-Every serious Hermes user hits the same wall: the agent forgets everything between sessions. Existing memory providers either:
+- **Your context window** as volatile RAM (fast, limited, per-session)
+- **Your local Markdown wiki** as persistent Disk (slow, unlimited, cross-session)
 
-- Lock you into a SaaS (Honcho, Mem0, Supermemory)
-- Require Docker + Qdrant + Redis (Memory OS)
-- Are read-only (hermes-homie-memory)
-- Don't follow a structured curation model (Open Second Brain)
-
-**hermes-llmwiki** is different:
-
-| | hermes-llmwiki | Others |
-|---|---|---|
-| **Karpathy 3-layer architecture** | ✅ Native | ❌ |
-| **AI-First note format** | ✅ Optimized for LLM retrieval | ❌ Human-first |
-| **Zero dependencies** | ✅ Python + ripgrep + optional SQLite | ❌ Docker/SaaS |
-| **Schema configurable** | ✅ `SCHEMA.md` drives your vault | ❌ Fixed structure |
-| **Write + Read** | ✅ Bidirectional | ⚠️ Some read-only |
-
-## Karpathy 3-Layer Architecture
+It provides a universal **harness** that any agent framework can plug into — no Docker, no cloud, no vector DB required.
 
 ```
-┌─────────────────────────────────────────┐
-│ Layer 3: Compiled Wiki (Query)          │
-│  entities/  concepts/  comparisons/     │
-│  projects/  queries/                    │
-│         ↑  LLM curation (nightly)       │
-├─────────────────────────────────────────┤
-│ Layer 2: Chronicle (Daily Notes)        │
-│  chronicle/daily/YYYY-MM-DD.md          │
-│         ↑  auto-capture from sync_turn  │
-├─────────────────────────────────────────┤
-│ Layer 1: Raw (Session Exports)          │
-│  raw/session-{id}.md                    │
-│         ↑  on_session_end / on_pre_compress│
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│  Agent (OpenClaw / LangChain / AutoGen ...) │
+│  ┌───────────────────────────────────────┐  │
+│  │  L1: Context Window (RAM)             │  │
+│  │  ├── Current conversation             │  │
+│  │  └── ← Injected wiki knowledge        │  │
+│  └───────────────────────────────────────┘  │
+│              ↑ ↓ LLMWiki Harness            │
+│  ┌───────────────────────────────────────┐  │
+│  │  L3: Local Markdown Wiki (Disk)       │  │
+│  │  ├── entities/  concepts/  projects/  │  │
+│  │  ├── chronicle/daily/  (conversation) │  │
+│  │  └── raw/  (session dumps)            │  │
+│  └───────────────────────────────────────┘  │
+└─────────────────────────────────────────────┘
 ```
 
-- **Layer 1 (Raw)**: Session dumps, temporary, disposable
-- **Layer 2 (Chronicle)**: Daily timeline, append-only, human-readable
-- **Layer 3 (Compiled)**: Atomic notes with wikilinks, cross-references, frontmatter — the "source of truth"
+## Features
+
+| Feature | Status |
+|---------|--------|
+| **Multi-engine search** — ripgrep, SQLite FTS, pure Python fallback | ✅ |
+| **Multi-strategy retrieval** — keyword, graph (wikilink traversal), temporal | ✅ |
+| **RRF fusion** — combine multiple retrieval strategies | ✅ |
+| **Token budget management** — never overflow the context window | ✅ |
+| **In-memory cache** — avoid repeated disk reads | ✅ |
+| **OpenClaw adapter** — drop-in memory hook | ✅ |
+| **3-layer vault architecture** (Karpathy-native) | ✅ |
+| **Zero dependencies** for core (optional enhancements via extras) | ✅ |
 
 ## Install
 
 ```bash
-# Option 1: pip
-pip install hermes-llmwiki
+# Core (zero dependencies)
+pip install llmwiki
 
-# Option 2: clone to Hermes plugins directory
-git clone https://github.com/chancelu/hermes-llmwiki.git ~/.hermes/plugins/hermes-llmwiki
+# With semantic search support
+pip install llmwiki[semantic]
+
+# Dev
+pip install llmwiki[dev]
 ```
 
-Then activate in `~/.hermes/config.yaml`:
+## Quick Start
 
-```yaml
-memory:
-  provider: llmwiki
-  llmwiki:
-    vault_path: ~/Documents/selfwiki   # or your Obsidian vault
-```
-
-Run setup wizard:
+### 1. Initialize a vault
 
 ```bash
-hermes memory setup
+llmwiki init ~/Documents/selfwiki
 ```
 
-## CLI Commands
+This creates the directory structure:
+```
+~/Documents/selfwiki/
+├── raw/              # Layer 1: session dumps
+├── chronicle/daily/  # Layer 2: daily conversation logs
+├── entities/         # Layer 3: atomic knowledge
+├── concepts/
+├── comparisons/
+├── projects/
+├── queries/
+└── SCHEMA.md
+```
+
+### 2. Use in your agent
+
+```python
+from llmwiki import ContextMemoryHarness
+
+harness = ContextMemoryHarness("~/Documents/selfwiki")
+harness.build_index()
+
+# Before each turn — retrieve relevant knowledge
+context = harness.retrieve_and_assemble(
+    query=user_message,
+    token_budget=2000,
+)
+
+# Inject into your prompt
+messages = [
+    {"role": "system", "content": f"{system_prompt}\n\n{context}"},
+    {"role": "user", "content": user_message},
+]
+
+# After each turn — capture to chronicle
+harness.capture_turn(user_message, assistant_response)
+
+# Periodically — curate chronicle into compiled notes
+harness.curate()
+```
+
+### 3. OpenClaw adapter
+
+```python
+from llmwiki.adapters import OpenClawMemoryHook
+
+hook = OpenClawMemoryHook("~/Documents/selfwiki")
+
+# On each turn:
+wiki_context = hook.on_turn_start(user_message)
+# → inject into system prompt
+
+hook.on_turn_end(user_message, assistant_response)
+# → auto-captures to chronicle
+```
+
+## CLI
 
 ```bash
-hermes llmwiki curate              # Manually trigger: daily notes → compiled wiki
-hermes llmwiki stats               # Vault statistics
-hermes llmwiki search "prompt injection"   # Search compiled layer
-hermes llmwiki health              # Dead links, orphans, stale notes
-hermes llmwiki export --format json        # Export wiki to JSON
-```
-
-## AI-First Note Format
-
-Every compiled note follows Karpathy's AI-First Vault Principle:
-
-```markdown
----
-type: concept
-name: "Prompt Injection"
-date: 2026-07-29
-tags: [security, llm]
-ai-first: true
-confidence: high
-sources: ["https://..."]
----
-
-## For future Claude
-Prompt injection is an attack where malicious input overrides the LLM's
-system instructions. This page is the canonical reference.
-
-## Key claims
-- Direct injection: user input contains hidden instructions
-- Indirect injection: data from external source carries payload
-- Source: OWASP LLM Top 10, 2026 edition
-
-## Related
-[[LLM Security]] · [[Jailbreak]] · [[System Prompt Hardening]]
+llmwiki init <path>              # Initialize vault
+llmwiki index [--force]          # Build search index
+llmwiki search "prompt injection" # Search wiki
+llmwiki curate [--llm]           # Run curation pipeline
+llmwiki stats                    # Vault statistics
+llmwiki health                   # Check for dead links, orphans
+llmwiki config                   # Show configuration
 ```
 
 ## Configuration
 
-Full config reference in [`CONFIG.md`](CONFIG.md).
+Create `llmwiki.yaml` in your vault root or `~/.config/llmwiki/config.yaml`:
+
+```yaml
+vault:
+  path: ~/Documents/selfwiki
+
+index:
+  engine: ripgrep  # ripgrep | sqlite | hybrid
+  incremental: true
+
+retrieve:
+  default_top_k: 5
+  strategies: [keyword, graph, temporal]
+  fusion_method: rrf
+
+context:
+  token_budget: 4000
+  format: markdown
+  priority: relevance  # relevance | recency | diversity | structured
+
+cache:
+  enabled: true
+  maxsize: 100
+  ttl: 300
+
+curate:
+  enabled: true
+  archive_after_days: 30
+```
+
+## Architecture
+
+### Core Components
+
+| Module | Purpose |
+|--------|---------|
+| `Indexer` | Manages search indices (ripgrep, SQLite, etc.) |
+| `Retriever` | Multi-strategy recall (keyword, graph, temporal) |
+| `Assembler` | Token-budget-aware context assembly |
+| `Cache` | In-memory LRU cache |
+
+### Data Flow
+
+```
+User Message → Retriever → [Keyword | Graph | Temporal] → RRF Fusion
+                                                        ↓
+                              Assembler ←── Token Budget Check
+                                                        ↓
+                                              System Prompt Injection
+
+Turn End → Capture → chronicle/daily/YYYY-MM-DD.md
+                              ↓ (scheduled curation)
+                     compiled/entities/ | concepts/ | projects/
+```
+
+## Vault Schema (Karpathy 3-Layer)
+
+```
+┌─────────────────────────────────────────┐
+│ Layer 3: Compiled Wiki (Query)          │
+│ entities/ concepts/ comparisons/        │
+│ projects/ queries/                      │
+│ ↑ LLM curation (nightly)                │
+├─────────────────────────────────────────┤
+│ Layer 2: Chronicle (Daily Notes)        │
+│ chronicle/daily/YYYY-MM-DD.md           │
+│ ↑ auto-capture from agent turns         │
+├─────────────────────────────────────────┤
+│ Layer 1: Raw (Session Exports)          │
+│ raw/session-{id}.md                     │
+│ ↑ on_session_end / on_pre_compress      │
+└─────────────────────────────────────────┘
+```
+
+## From hermes-llmwiki
+
+This project evolved from [`hermes-llmwiki`](https://github.com/chancelu/hermes-llmwiki). Key changes in 0.2.0:
+
+- **Framework-agnostic**: No longer Hermes-only — works with any agent
+- **Multi-engine search**: ripgrep + SQLite FTS + Python fallback
+- **Multi-strategy retrieval**: keyword + graph + temporal + RRF fusion
+- **Token budget management**: Dynamic context assembly
+- **In-memory cache**: L1 RAM layer for frequent queries
+- **OpenClaw adapter**: First-class adapter for OpenClaw agents
 
 ## License
 

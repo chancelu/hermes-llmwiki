@@ -1,4 +1,6 @@
-"""Atomic file writes and vault path utilities."""
+"""Atomic file writes and path utilities."""
+
+from __future__ import annotations
 
 import os
 import tempfile
@@ -48,7 +50,6 @@ def expand_path(path_str: str) -> Path:
 
 def safe_filename(name: str) -> str:
     """Sanitize a string for use as a filename."""
-    # Replace characters that are problematic on most filesystems
     invalid = '<>:"/\\|?*'
     for ch in invalid:
         name = name.replace(ch, "_")

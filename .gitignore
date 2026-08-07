@@ -10,3 +10,10 @@ venv/
 *.db
 .DS_Store
 *.tmp
+
+# LLMWiki
+.llmwiki/
+.llmwiki.sqlite
+chronicle/daily/archive/
+raw/
+

@@ -3,16 +3,19 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hermes-llmwiki"
-version = "0.1.1"
-description = "Karpathy-native local Markdown wiki memory provider for Hermes Agent"
+name = "llmwiki"
+version = "0.2.0"
+description = "Context-Memory Harness for AI Agents. Context Window = RAM, Local Wiki = Disk."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "chancelu"},
 ]
-keywords = ["hermes", "agent", "memory", "wiki", "markdown", "obsidian", "llm"]
+keywords = [
+    "agent", "memory", "wiki", "markdown", "obsidian",
+    "llm", "context", "retrieval", "rag", "karpathy"
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -26,21 +29,19 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/chancelu/hermes-llmwiki"
-Issues = "https://github.com/chancelu/hermes-llmwiki/issues"
+Homepage = "https://github.com/chancelu/llmwiki"
+Issues = "https://github.com/chancelu/llmwiki/issues"
 
 [project.scripts]
-llmwiki = "hermes_llmwiki.__main__:main"
-
-[project.entry-points."hermes.memory_provider"]
-llmwiki = "hermes_llmwiki:LlmwikiMemoryProvider"
+llmwiki = "llmwiki.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "black", "ruff"]
+semantic = ["sentence-transformers", "numpy"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["hermes_llmwiki*"]
+include = ["llmwiki*"]
 
 [tool.black]
 line-length = 100
